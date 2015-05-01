@@ -13,6 +13,7 @@ namespace EKonsulatConsole
 
         static void Main(string[] args)
         {
+
             Helper.Log(ConsoleColor.Cyan, "Please enter city number: ");
             var idc = Console.ReadLine();
             Helper.Log(ConsoleColor.Cyan, "Please enter service or visa type id: ");
@@ -21,19 +22,16 @@ namespace EKonsulatConsole
             if (IdValidator.ValidateArgsCity(idc) && IdValidator.ValidateArgsService(ids))
             {
                 LvivWorker driveWorker = new LvivWorker(ids, idc);
-
-                while (driveWorker.isDone == false)
+                while (driveWorker.IsDone == false)
                 {
                     driveWorker.DoJob();
                 }
-
             }
             else
             {
                 Helper.Log(ConsoleColor.Cyan, "[ERROR] Entered city or visa type is wrong!");
                 Console.ReadLine();
             }
-
             Console.ReadLine();
         }
     }

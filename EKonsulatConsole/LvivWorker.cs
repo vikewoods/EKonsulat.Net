@@ -18,23 +18,18 @@ namespace EKonsulatConsole
     {
         private string Url { get; set; }
         private const string AntigateKey = "eca8a538092144846d1e013a03555931";
-        public string IdService { get; set; }
-        public string IdCity { get; set; }
-        public bool isDone { get; set; }
-
-        private ArrayList dateList = new ArrayList();
-
+        private string IdService { get; set; }
+        private string IdCity { get; set; }
+        public bool IsDone { get; set; }
+        private readonly ArrayList _dateList = new ArrayList();
         private readonly Helper _helper = new Helper();
 
         public LvivWorker(string ids, string idc)
         {
             IdService = ids;
             IdCity = idc;
-
             Url = $"https://secure.e-konsulat.gov.pl/Uslugi/RejestracjaTerminu.aspx?IDUSLUGI={IdService}&IDPlacowki={IdCity}";
         }
-
-
 
         public bool DoJob()
         {
@@ -45,7 +40,6 @@ namespace EKonsulatConsole
 
             browser.RequestLogged += OnBrowserRequestLogged;
             browser.MessageLogged += new Action<Browser, string>(OnBrowserMessageLogged);
-            //browser.UserAgent = "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/534.10 (KHTML, like Gecko) Chrome/8.0.552.224 Safari/534.10";
             browser.GenerateUserAgent();
 
             _helper.Log(ConsoleColor.Yellow, "[SIMPLE BROWSER] UserAgent " + browser.UserAgent);
@@ -57,26 +51,18 @@ namespace EKonsulatConsole
             browser.SetProxy(lines[selectRandomProxy]);
             _helper.Log(ConsoleColor.Cyan, "[INFO] Setting proxy to: " + lines[selectRandomProxy]);
 
-
             try
             {
-
                 browser.Navigate(Url);
-
                 if (LastRequestFailed(browser))
                 {
-                    _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!"); return isDone = false;
-                    
+                    _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!"); return IsDone = false;
                 }
 
                 _helper.Log(ConsoleColor.Green, "[INFO] Succsesful connection to website!");
 
-                //Console.WriteLine(browser.CurrentHtml);
-                // https://secure.e-konsulat.gov.pl/../CaptchaType.ashx?id=01ddcc28152241f28e59caed9daad612
-
-
                 var capthaImage = browser.Find("img", FindBy.Id, "cp_KomponentObrazkowy_CaptchaImageID").GetAttribute("src");
-                var properUrl = String.Format("https://secure.e-konsulat.gov.pl{0}", capthaImage.Substring(2));
+                var properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage.Substring(2)}";
 
                 if (browser.Find("cp_KomponentObrazkowy_CaptchaImageID").Exists)
                 {
@@ -87,23 +73,21 @@ namespace EKonsulatConsole
 
                     browser.DownloadImageFromStream(properUrl, @"Assets\", fileNameGuid + ".png");
 
-                    var anticaptha = new AntiCaptcha(AntigateKey);
-                    //anticaptha.Parameters.Set("min_len", "4");
-                    //anticaptha.Parameters.Set("max_len", "4");
-                    anticaptha.CheckDelay = 2500;
-                    anticaptha.SlotRetryDelay = 250;
-                    anticaptha.SlotRetry = 2;
-                    anticaptha.CheckRetryCount = 10;
+                    var anticaptha = new AntiCaptcha(AntigateKey)
+                    {
+                        CheckDelay = 2500,
+                        SlotRetryDelay = 250,
+                        SlotRetry = 2,
+                        CheckRetryCount = 10
+                    };
                     anticaptha.Parameters.Set("regsense", "1");
 
                     var captha = anticaptha.GetAnswer(@"Assets\" + fileNameGuid + ".png");
-
                     if (captha != null)
                     {
                         _helper.Log(ConsoleColor.Green, "[INFO] Captha code is " + captha);
 
                         var capthaInput = browser.Find("cp_KomponentObrazkowy_VerificationID");
-
                         if (capthaInput.Exists)
                         {
                             capthaInput.Value = captha;
@@ -112,8 +96,7 @@ namespace EKonsulatConsole
 
                             if (LastRequestFailed(browser))
                             {
-                                _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!"); return isDone = false;
-
+                                _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!"); return IsDone = false;
                             }
 
                             // Errorr captha
@@ -122,7 +105,7 @@ namespace EKonsulatConsole
                             {
                                 anticaptha.FalseCaptcha();
                                 Console.Title = "[CAPTHA] E-Konsulat Visa Search with params!";
-                                _helper.Log(ConsoleColor.Red, "[ERROR] Wrong captha code!"); return isDone = false;
+                                _helper.Log(ConsoleColor.Red, "[ERROR] Wrong captha code!"); return IsDone = false;
                             }
 
                             // Succses captha
@@ -130,7 +113,6 @@ namespace EKonsulatConsole
                             if (dateEl.Exists)
                             {
                                 _helper.Log(ConsoleColor.Magenta, "[INFO] No dates avaliable: ");
-                                //_helper.Beep();
                             }
 
                             // Succses captha and founded new dates
@@ -141,39 +123,25 @@ namespace EKonsulatConsole
 
                                 foreach (var opt in dateAvalOptions)
                                 {
-                                    _helper.Log(ConsoleColor.Magenta, "[INFO] Avaliable date is " + opt.Value);
-                                    //opt.Checked = true;                
-                                    dateList.Add(opt.Value);
+                                    _helper.Log(ConsoleColor.Magenta, "[INFO] Avaliable date is " + opt.Value);             
+                                    _dateList.Add(opt.Value);
                                 }
 
-                                dateAval.Value = dateList[1].ToString();
-                                //dateAval.SubmitForm();
-                                _helper.Log(ConsoleColor.Magenta, "[INFO] Selecting first option date " + dateList[1]);
-
-
-                                //dateAval.Click();
+                                dateAval.Value = _dateList[1].ToString();
+                                _helper.Log(ConsoleColor.Magenta, "[INFO] Selecting first option date " + _dateList[1]);
                                 _helper.Log(ConsoleColor.Green, "[INFO] Click on date select");
+
                                 if (LastRequestFailed(browser))
                                 {
-                                    _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!"); return isDone = false;
-
+                                    _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!"); return IsDone = false;
                                 }
-
-                                //browser.CurrentHtml.Replace("disabled", "enabled");
-
-                                
-
-                                //Thread.Sleep(2000);
 
                                 browser.Find("cp_btnRezerwuj").Click();
                                 _helper.Log(ConsoleColor.Green, "[INFO] Trying to submit date");
                                 if (LastRequestFailed(browser))
                                 {
-                                    _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!"); return isDone = false;
-
+                                    _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!"); return IsDone = false;
                                 }
-
-
 
                                 _helper.Log(ConsoleColor.Green, "[INFO] Get the form! Downloading user application!");
                                 _helper.Log(ConsoleColor.Magenta, "[XML] Loading data from file");
@@ -216,7 +184,7 @@ namespace EKonsulatConsole
                                     }
 
 
-                                isDone = true;
+                                IsDone = true;
                             }
                         }
 
@@ -224,10 +192,10 @@ namespace EKonsulatConsole
                     else
                     {
                         _helper.Log(ConsoleColor.Red, "[ERROR] Capta code return error!");
-                        isDone = false;
+                        IsDone = false;
                     }
 
-                    isDone = true;
+                    IsDone = true;
                 }
             }
             catch (Exception ex)
@@ -237,12 +205,11 @@ namespace EKonsulatConsole
             }
 
 
-            return isDone = false;
+            return IsDone = false;
         }
 
 
         /* Function section for simple browser */
-
         private bool LastRequestFailed(Browser browser)
         {
             if (browser.LastWebException != null)
