@@ -119,6 +119,12 @@ namespace EKonsulatConsole
         public const string ArriveDateInput = "cp_f_txt30DataWjazdu";
         public const string DepartureDateInput = "cp_f_txt31DataWyjazdu";
         public const string OtherShengenVisasCheckbox = "cp_f_rbl26_0";
+        public const string OtherShengenVisasFirstInInput = "PoprzednieWizy_0_txtDataOd";
+        public const string OtherShengenVisasFirstOutInInput = "PoprzednieWizy_0_txtDataDo";
+        public const string OtherShengenVisasSecondInInput = "PoprzednieWizy_1_txtDataOd";
+        public const string OtherShengenVisasSecondOutInput = "PoprzednieWizy_1_txtDataDo";
+        public const string OtherShengenVisasThridInInput = "PoprzednieWizy_2_txtDataOd";
+        public const string OtherShengenVisasThirdOutInput = "PoprzednieWizy_2_txtDataDo";
         public const string EntryPermitCheckbox = "cp_f_chkNiedotyczy28";
     }
 }
