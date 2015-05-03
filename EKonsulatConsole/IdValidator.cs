@@ -27,7 +27,7 @@ namespace EKonsulatConsole
 
         public bool ValidateArgsCity(string args)
         {
-            if (args == LvivCityId || args == VinicaCityId || args == TestCityId)
+            if (args == LvivCityId || args == VinicaCityId || args == TestCityId || args == "83")
             {
                 return true;
             }

@@ -5,57 +5,6 @@ namespace EKonsulatConsole
 {
     public class FormHelper
     {
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string LastNameBirthday { get; set; }
-        public string DateOfBirthday { get; set; }
-        public string PlaceOfBirthday { get; set; }
-        public string CountryOfBirthday { get; set; }
-        public string CurrentNat { get; set; }
-        public string OriginalNat { get; set; }
-        public string Sex { get; set; }
-        public string MartialStatus { get; set; }
-        public string NationalId { get; set; }
-        public string TypeOfTravelDocument { get; set; }
-        public string TypeOfTravelDocumentOther { get; set; }
-        public string NumberOfTravelDocument { get; set; }
-        public string NumberOfTravelDocumentDateIssue { get; set; }
-        public string NumberOfTravelDocumentValidUntil { get; set; }
-        public string NumberOfTravelDocumentIssuedBy { get; set; }
-        public string MinorDoesnotApplied { get; set; }
-        public string ApplicantCountry { get; set; }
-        public string ApplicantState { get; set; }
-        public string ApplicantPlace { get; set; }
-        public string ApplicantPostalCode { get; set; }
-        public string ApplicantAddress { get; set; }
-        public string ApplicantEmail { get; set; }
-        public string ApplicantPhoneCode { get; set; }
-        public string ApplicantPhone { get; set; }
-        public string OtherResidence { get; set; }
-        public string CurrentOccupation { get; set; }
-        public string CurrentOccupationAddressType { get; set; }
-        public string CurrentOccupationState { get; set; }
-        public string CurrentOccupationProvince { get; set; }
-        public string CurrentOccupationPlace { get; set; }
-        public string CurrentOccupationPostalCode { get; set; }
-        public string CurrentOccupationAddress { get; set; }
-        public string CurrentOccupationPhoneCode { get; set; }
-        public string CurrentOccupationPhone { get; set; }
-        public string CurrentOccupationName { get; set; }
-        public string CurrentOccupationEmail { get; set; }
-        public string CurrentOccupationFaxCode { get; set; }
-        public string CurrentOccupationFax { get; set; }
-        public string MainPurpose { get; set; }
-        public string DestinationCountry { get; set; }
-        public string FirstEntryCountry { get; set; }
-        public string NumberOfEntries { get; set; }
-        public string Duration { get; set; }
-        public string ArriveDate { get; set; }
-        public string DepartureDate { get; set; }
-        public string OtherShengenVisas { get; set; }
-        public string EntryPermit { get; set; }
-        public string ReceivingPersonType { get; set; }
-
         public const string FirstNameInput = "cp_f_daneOs_txtImiona";
         public const string LastNameInput = "cp_f_daneOs_txtNazwisko";
         public const string LastNameBirthdayInput = "cp_f_daneOs_txtNazwiskoRodowe";
@@ -118,7 +67,7 @@ namespace EKonsulatConsole
         public const string DurationInput = "cp_f_txt25OkresPobytu";
         public const string ArriveDateInput = "cp_f_txt30DataWjazdu";
         public const string DepartureDateInput = "cp_f_txt31DataWyjazdu";
-        public const string OtherShengenVisasCheckbox = "cp_f_rbl26_0";
+        public const string OtherShengenVisasCheckbox = "cp_f_rbl26_1";
         public const string OtherShengenVisasFirstInInput = "PoprzednieWizy_0_txtDataOd";
         public const string OtherShengenVisasFirstOutInInput = "PoprzednieWizy_0_txtDataDo";
         public const string OtherShengenVisasSecondInInput = "PoprzednieWizy_1_txtDataOd";
@@ -126,5 +75,30 @@ namespace EKonsulatConsole
         public const string OtherShengenVisasThridInInput = "PoprzednieWizy_2_txtDataOd";
         public const string OtherShengenVisasThirdOutInput = "PoprzednieWizy_2_txtDataDo";
         public const string EntryPermitCheckbox = "cp_f_chkNiedotyczy28";
+        public const string ReceivingPersonLifeCheckbox = "cp_f_ctrl31__rbl34_0";
+        public const string ReceivingPersonFirmCheckbox = "cp_f_ctrl31__rbl34_1";
+        public const string ReceivingPersonFirstName = "cp_f_ctrl31__txt34Imie";
+        public const string ReceivingPersonLastName = "cp_f_ctrl31__txt34Nazwisko";
+        public const string ReceivingPersonName = "cp_f_ctrl31__txt34Nazwa";
+        public const string ReceivingPersonCountry = "cp_f_ctrl31__ddl34panstwo";
+        public const string ReceivingPersonCity = "cp_f_ctrl31__txt34miejscowosc";
+        public const string ReceivingPersonPostalCode = "cp_f_ctrl31__txt34kod";
+        public const string ReceivingPersonPhonePrefix = "cp_f_ctrl31__txt34prefikstel";
+        public const string ReceivingPersonPhone = "cp_f_ctrl31__txt34tel";
+        public const string ReceivingPersonFaxPrefix = "cp_f_ctrl31__txt34prefiksfax";
+        public const string ReceivingPersonFax = "cp_f_ctrl31__txt34fax";
+        public const string ReceivingPersonAddress = "cp_f_ctrl31__txt34adres";
+        public const string ReceivingPersonHouseNumber = "cp_f_ctrl31__txt34NumerDomu";
+        public const string ReceivingPersonFlatNumber = "cp_f_ctrl31__txt34NumerLokalu";
+        public const string ReceivingPersonEmail = "cp_f_ctrl31__txt34Email";
+        public const string HowsPayCheckbox = "cp_f_rbl35_0";
+        public const string PayCash = "cp_f_rb36Gotowka";
+        public const string PayCard = "cp_f_rb36Karty";
+        public const string PayAcom = "cp_f_rb36Zakwaterowanie";
+        public const string EuDoesApplied = "cp_f_chkNieDotyczy43";
+        public const string IAgreeFirst = "cp_f_chk44Oswiadczenie1";
+        public const string IAgreeSecond = "cp_f_chk44Oswiadczenie2";
+        public const string IAgreeLast = "cp_f_chk44Oswiadczenie3";
+
     }
 }

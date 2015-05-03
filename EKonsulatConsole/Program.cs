@@ -32,7 +32,7 @@ namespace EKonsulatConsole
                 Helper.Log(ConsoleColor.Cyan, "[ERROR] Entered city or visa type is wrong!");
                 Console.ReadLine();
             }
-            Console.ReadLine();
+            //Console.ReadLine();
         }
     }
 }

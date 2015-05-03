@@ -53,6 +53,14 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
+    <Reference Include="WebDriver, Version=2.45.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Selenium.WebDriver.2.45.0\lib\net40\WebDriver.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="WebDriver.Support, Version=2.45.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Selenium.Support.2.45.0\lib\net40\WebDriver.Support.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="FormHelper.cs" />
@@ -67,7 +75,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\Work\e-konsulat\SimpleBrowser-master\SimpleBrowser\SimpleBrowser.csproj">
+    <ProjectReference Include="..\..\SimpleBrowser-master\SimpleBrowser\SimpleBrowser.csproj">
       <Project>{041eb5e9-de14-41ba-b59d-f77612578cd6}</Project>
       <Name>SimpleBrowser</Name>
     </ProjectReference>

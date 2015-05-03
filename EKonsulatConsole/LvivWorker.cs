@@ -10,7 +10,10 @@ using System.Threading.Tasks;
 using System.Xml;
 using Akumu.Antigate;
 using Newtonsoft.Json.Linq;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
 using SimpleBrowser;
+using Cookie = System.Net.Cookie;
 
 namespace EKonsulatConsole
 {
@@ -23,6 +26,9 @@ namespace EKonsulatConsole
         public bool IsDone { get; set; }
         private readonly ArrayList _dateList = new ArrayList();
         private readonly Helper _helper = new Helper();
+        public HtmlResult capthaInput;
+        public HtmlResult CapthaHtmlResult;
+        public string properUrl;
 
         public LvivWorker(string ids, string idc)
         {
@@ -41,6 +47,7 @@ namespace EKonsulatConsole
             browser.RequestLogged += OnBrowserRequestLogged;
             browser.MessageLogged += new Action<Browser, string>(OnBrowserMessageLogged);
             browser.GenerateUserAgent();
+            
 
             _helper.Log(ConsoleColor.Yellow, "[SIMPLE BROWSER] UserAgent " + browser.UserAgent);
 
@@ -48,12 +55,20 @@ namespace EKonsulatConsole
             var lines = File.ReadAllLines(@"Proxy.txt");
             var selectRandomProxy = proxyRandom.Next(0, lines.Length);
             _helper.Log(ConsoleColor.Green, "[INFO] Total proxies for this session is " + lines.Length);
+
+            if (_helper.CanPing(lines[selectRandomProxy].Substring(0, lines[selectRandomProxy].LastIndexOf(':'))))
+            {
+                _helper.Log(ConsoleColor.Magenta, "[INFO] Dead proxy! Trying new one!");
+                IsDone = false;
+            }
+
+
             browser.SetProxy(lines[selectRandomProxy]);
             _helper.Log(ConsoleColor.Cyan, "[INFO] Setting proxy to: " + lines[selectRandomProxy]);
 
             try
             {
-                browser.Navigate(Url);
+                browser.Navigate(Url, 20000);
                 if (LastRequestFailed(browser))
                 {
                     _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!");
@@ -62,18 +77,41 @@ namespace EKonsulatConsole
 
                 _helper.Log(ConsoleColor.Green, "[INFO] Succsesful connection to website!");
 
-                var capthaImage =
-                    browser.Find("img", FindBy.Id, "cp_KomponentObrazkowy_CaptchaImageID").GetAttribute("src");
-                var properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage.Substring(2)}";
+                
 
-                if (browser.Find("cp_KomponentObrazkowy_CaptchaImageID").Exists)
+
+                if (IdCity == "83")
+                {
+                    CapthaHtmlResult = browser.Find("c_uslugi_rejestracjaterminu_cp_botdetectcaptcha_CaptchaImage");
+                    var capthaImage = browser.Find("img", FindBy.Id, "c_uslugi_rejestracjaterminu_cp_botdetectcaptcha_CaptchaImage").GetAttribute("src");
+                    properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage}";
+                }
+                else
+                {
+                    CapthaHtmlResult = browser.Find("cp_KomponentObrazkowy_CaptchaImageID");
+                    var capthaImage = browser.Find("img", FindBy.Id, "cp_KomponentObrazkowy_CaptchaImageID").GetAttribute("src");
+                    properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage.Substring(2)}";
+                }
+
+                
+
+                if (CapthaHtmlResult.Exists)
                 {
                     var fileNameGuid = Guid.NewGuid();
 
                     _helper.Log(ConsoleColor.Green, "[INFO] Link to captha: " + properUrl);
                     _helper.Log(ConsoleColor.Green, "[INFO] Saving to file: " + fileNameGuid);
 
-                    browser.DownloadImageFromStream(properUrl, @"Assets\", fileNameGuid + ".png");
+
+                    if (IdCity == "83")
+                    {
+                        browser.DownloadImageFromStream(properUrl, @"Assets\", fileNameGuid + ".png");
+                    }
+                    else
+                    {
+                        browser.DownloadImageFromStream(properUrl, @"Assets\", fileNameGuid + ".png");
+                    }
+
 
                     var anticaptha = new AntiCaptcha(AntigateKey)
                     {
@@ -89,7 +127,16 @@ namespace EKonsulatConsole
                     {
                         _helper.Log(ConsoleColor.Green, "[INFO] Captha code is " + captha);
 
-                        var capthaInput = browser.Find("cp_KomponentObrazkowy_VerificationID");
+                        
+                        if (IdCity == "83")
+                        {
+                            capthaInput = browser.Find("cp_BotDetectCaptchaCodeTextBox");
+                        }
+                        else
+                        {
+                            capthaInput = browser.Find("cp_KomponentObrazkowy_VerificationID");
+                        }
+                        
                         if (capthaInput.Exists)
                         {
                             capthaInput.Value = captha;
@@ -107,7 +154,6 @@ namespace EKonsulatConsole
                             if (errorCaptha.Exists)
                             {
                                 anticaptha.FalseCaptcha();
-                                Console.Title = "[CAPTHA] E-Konsulat Visa Search with params!";
                                 _helper.Log(ConsoleColor.Red, "[ERROR] Wrong captha code!");
                                 return IsDone = false;
                             }
@@ -120,7 +166,7 @@ namespace EKonsulatConsole
                             }
 
                             // Succses captha and founded new dates
-                            var dateAval = browser.Find("select", FindBy.Id, "cp_cbDzien");
+                            var dateAval = browser.Find(ElementType.SelectBox, FindBy.Id, "cp_cbDzien");
                             if (dateAval.Exists)
                             {
                                 var dateAvalOptions = browser.Select("#cp_cbDzien option");
@@ -152,6 +198,68 @@ namespace EKonsulatConsole
                                 _helper.Log(ConsoleColor.Green, "[INFO] Get the form! Downloading user application!");
                                 _helper.Log(ConsoleColor.Magenta, "[XML] Loading data from file");
 
+                                // Go throught Webdriver
+                                var chromeOptions = new ChromeOptions();
+
+                                var proxy = new Proxy();
+                                proxy.HttpProxy = lines[selectRandomProxy];
+                                proxy.FtpProxy = lines[selectRandomProxy];
+                                proxy.SslProxy = lines[selectRandomProxy];
+                               
+                                chromeOptions.Proxy = proxy;
+                                IWebDriver driver = new ChromeDriver(@"Chrome\", chromeOptions);
+                                //Cookie cookie = new Cookie();
+                                driver.Manage().Window.Maximize();
+                                driver.Navigate().GoToUrl(browser.Url);
+                                var driverCookie = driver.Manage().Cookies;
+                                var browserCookie = browser.Cookies;
+                                var cookie = _helper.GetAllCookies(browserCookie);
+
+                                for (int i = 0; i < cookie.Count; i++)
+                                {
+                                    driverCookie.AddCookie(new OpenQA.Selenium.Cookie(cookie[i].Name, cookie[i].Value, cookie[i].Domain, cookie[i].Path, cookie[i].Expires));
+                                }
+
+                                // Element
+                                var firstName = driver.FindElement(By.Id(FormHelper.FirstNameInput));
+                                var lastName = driver.FindElement(By.Id(FormHelper.LastNameInput));
+                                var lastNameBirthday = driver.FindElement(By.Id(FormHelper.LastNameBirthdayInput));
+                                var dateOfBirthday = driver.FindElement(By.Id(FormHelper.DateOfBirthdayInput));
+                                var placeOfBirthday = driver.FindElement(By.Id(FormHelper.PlaceOfBirthdayInput));
+                                var countryOfBirthday = driver.FindElement(By.Id(FormHelper.CountryOfBirthdayInput));
+                                var currentNat = driver.FindElement(By.Id(FormHelper.CurrentNatInput));
+                                var originalNat = driver.FindElement(By.Id(FormHelper.OriginalNatInput));
+                                var nationalId = driver.FindElement(By.Id(FormHelper.NationalIdInput));
+                                var numberOfTravelDoc = driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentInput));
+                                var numberOfTravelDateIssue = driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentDateIssueInput));
+                                var numberOfTravelValid = driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentValidUntilInput));
+                                var numberOfTravelIssuedBy = driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentIssuedByInput));
+                                var appCountry = driver.FindElement(By.Id(FormHelper.ApplicantCountrySelect));
+                                var appState = driver.FindElement(By.Id(FormHelper.ApplicantStateInput));
+                                var appPlace = driver.FindElement(By.Id(FormHelper.ApplicantPlaceInput));
+                                var appPostalCode = driver.FindElement(By.Id(FormHelper.ApplicantPostalCodeInput));
+                                var appAddress = driver.FindElement(By.Id(FormHelper.ApplicantAddressInput));
+                                var appEmail = driver.FindElement(By.Id(FormHelper.ApplicantEmailInput));
+                                var appPhoneCode = driver.FindElement(By.Id(FormHelper.ApplicantPhoneCodeInput));
+                                var appPhone = driver.FindElement(By.Id(FormHelper.ApplicantPhoneInput));
+                                var curOcupState = driver.FindElement(By.Id(FormHelper.CurrentOccupationStateSelect));
+                                var curOcupProvince = driver.FindElement(By.Id(FormHelper.CurrentOccupationProvinceInput));
+                                var curOcupPlace = driver.FindElement(By.Id(FormHelper.CurrentOccupationPlaceInput));
+                                var curOcupPostalCode = driver.FindElement(By.Id(FormHelper.CurrentOccupationPostalCodeInput));
+                                var curOcupAddress = driver.FindElement(By.Id(FormHelper.CurrentOccupationAddressInput));
+                                var curOcupPhoneCode = driver.FindElement(By.Id(FormHelper.CurrentOccupationPhoneCodeInput));
+                                var curOcupPhone = driver.FindElement(By.Id(FormHelper.CurrentOccupationPhoneInput));
+                                var curOcupName = driver.FindElement(By.Id(FormHelper.CurrentOccupationNameInput));
+                                var curOcupEmail = driver.FindElement(By.Id(FormHelper.CurrentOccupationEmailInput));
+                                var curOcupFaxCode = driver.FindElement(By.Id(FormHelper.CurrentOccupationFaxCodeInput));
+                                var curOcupFax = driver.FindElement(By.Id(FormHelper.CurrentOccupationFaxInput));
+                                var destinationCountry = driver.FindElement(By.Id(FormHelper.DestinationCountrySelect));
+                                var firstEntry = driver.FindElement(By.Id(FormHelper.FirstEntryCountrySelect));
+                                var duration = driver.FindElement(By.Id(FormHelper.DurationInput));
+                                var arrDate = driver.FindElement(By.Id(FormHelper.ArriveDateInput));
+                                var deparDate = driver.FindElement(By.Id(FormHelper.DepartureDateInput));
+                                var recCountry = driver.FindElement(By.Id(FormHelper.ReceivingPersonCountry));
+
                                 XmlDocument xmlDocument = new XmlDocument();
                                 xmlDocument.Load(@"Input\applicant_1.xml");
                                 XmlNodeList nodes = xmlDocument.DocumentElement?.SelectNodes("/applicants/applicant");
@@ -159,238 +267,201 @@ namespace EKonsulatConsole
                                 if (nodes != null)
                                     foreach (XmlNode node in nodes)
                                     {
-
-
-                                        browser.Find(FormHelper.FirstNameInput).Value =
-                                            node.SelectSingleNode("FirstName")?.InnerText;
-                                        browser.Find(FormHelper.LastNameInput).Value =
-                                            node.SelectSingleNode("LastName")?.InnerText;
-                                        browser.Find(FormHelper.LastNameBirthdayInput).Value =
-                                            node.SelectSingleNode("LastNameBirthday")?.InnerText;
-                                        browser.Find(FormHelper.DateOfBirthdayInput).Value =
-                                            node.SelectSingleNode("DateOfBirthday")?.InnerText;
-                                        browser.Find(FormHelper.PlaceOfBirthdayInput).Value =
-                                            node.SelectSingleNode("PlaceOfBirthday")?.InnerText;
-                                        browser.Find(FormHelper.CountryOfBirthdayInput).Value =
-                                            node.SelectSingleNode("CountryOfBirthday")?.InnerText;
-                                        browser.Find(FormHelper.CurrentNatInput).Value =
-                                            node.SelectSingleNode("CurrentNat")?.InnerText;
-                                        browser.Find(FormHelper.OriginalNatInput).Value =
-                                            node.SelectSingleNode("OriginalNat")?.InnerText;
+                                        firstName.SendKeys(node.SelectSingleNode("FirstName")?.InnerText);
+                                        lastName.SendKeys(node.SelectSingleNode("LastName")?.InnerText);
+                                        lastNameBirthday.SendKeys(node.SelectSingleNode("LastNameBirthday")?.InnerText);
+                                        dateOfBirthday.SendKeys(node.SelectSingleNode("DateOfBirthday")?.InnerText);
+                                        placeOfBirthday.SendKeys(node.SelectSingleNode("PlaceOfBirthday")?.InnerText);
+                                        countryOfBirthday.SendKeys(node.SelectSingleNode("CountryOfBirthday")?.InnerText);
+                                        currentNat.SendKeys(node.SelectSingleNode("CurrentNat")?.InnerText);
+                                        originalNat.SendKeys(node.SelectSingleNode("OriginalNat")?.InnerText);
 
                                         var sexState = node.SelectSingleNode("Sex")?.InnerText;
-
-                                        if (sexState != null && sexState.Equals("M"))
+                                        if (sexState != null && sexState == "M")
                                         {
-                                            browser.Find(FormHelper.SexMaleCheckbox).Checked = true;
-                                        }
-                                        else if (sexState != null && sexState.Equals("F"))
+                                            driver.FindElement(By.Id(FormHelper.SexMaleCheckbox)).Click();
+                                        }else if(sexState != null && sexState == "F")
                                         {
-                                            browser.Find(FormHelper.SexFemaleCheckbox).Checked = true;
+                                            driver.FindElement(By.Id(FormHelper.SexFemaleCheckbox)).Click();
                                         }
-
-                                        browser.Find(FormHelper.NationalIdInput).Value =
-                                            node.SelectSingleNode("NationalId")?.InnerText;
-
 
                                         var martialStatus = node.SelectSingleNode("MartialStatus")?.InnerText;
-
-                                        if (martialStatus != null && martialStatus.Equals("KP"))
+                                        if (martialStatus != null && martialStatus == "KP")
                                         {
-                                            browser.Find(FormHelper.MartialStatusSingleCheckbox).Checked = true;
-                                        }
-                                        else if (martialStatus != null && martialStatus.Equals("ZZ"))
+                                            driver.FindElement(By.Id(FormHelper.MartialStatusSingleCheckbox)).Click();
+                                        }else if (martialStatus != null && martialStatus == "ZZ")
                                         {
-                                            browser.Find(FormHelper.MartialStatusMarriedCheckbox).Checked = true;
-                                        }
-                                        else if (martialStatus != null && martialStatus.Equals("SP"))
+                                            driver.FindElement(By.Id(FormHelper.MartialStatusMarriedCheckbox)).Click();
+                                        }else if (martialStatus != null && martialStatus == "SP")
                                         {
-                                            browser.Find(FormHelper.MartialStatusSeparatedCheckbox).Checked = true;
-                                        }
-                                        else if (martialStatus != null && martialStatus.Equals("RR"))
+                                            driver.FindElement(By.Id(FormHelper.MartialStatusSeparatedCheckbox)).Click();
+                                        }else if (martialStatus != null && martialStatus == "RR")
                                         {
-                                            browser.Find(FormHelper.MartialStatusDivorcedCheckbox).Checked = true;
-                                        }
-                                        else if (martialStatus != null && martialStatus.Equals("WW"))
+                                            driver.FindElement(By.Id(FormHelper.MartialStatusDivorcedCheckbox)).Click();
+                                        }else if (martialStatus != null && martialStatus == "WW")
                                         {
-                                            browser.Find(FormHelper.MartialStatusWidowerCheckbox).Checked = true;
-                                        }
-                                        else if (martialStatus != null && martialStatus.Equals("IN"))
+                                            driver.FindElement(By.Id(FormHelper.MartialStatusWidowerCheckbox)).Click();
+                                        }else if (martialStatus != null && martialStatus == "IN")
                                         {
-                                            browser.Find(FormHelper.MartialStatusOtherCheckbox).Checked = true;
+                                            driver.FindElement(By.Id(FormHelper.MartialStatusOtherCheckbox)).Click();
                                         }
 
-                                        var typeTravelDocument =
-                                            node.SelectSingleNode("TypeOfTravelDocument")?.InnerText;
+                                        nationalId.SendKeys(node.SelectSingleNode("NationalId")?.InnerText);
 
-                                        if (typeTravelDocument != null && typeTravelDocument.Equals("1"))
+                                        var typeOfDocument = node.SelectSingleNode("TypeOfTravelDocument")?.InnerText;
+                                        if (typeOfDocument != null && typeOfDocument == "1")
                                         {
-                                            browser.Find(FormHelper.TypeOfTravelDocumentOriginalCheckbox).Checked = true;
-                                        }
-                                        else if (typeTravelDocument != null && typeTravelDocument.Equals("2"))
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOriginalCheckbox)).Click();
+                                        }else if (typeOfDocument != null && typeOfDocument == "2")
                                         {
-                                            browser.Find(FormHelper.TypeOfTravelDocumentDiplomaticCheckbox).Checked =
-                                                true;
-                                        }
-                                        else if (typeTravelDocument != null && typeTravelDocument.Equals("3"))
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentDiplomaticCheckbox)).Click();
+                                        }else if (typeOfDocument != null && typeOfDocument == "3")
                                         {
-                                            browser.Find(FormHelper.TypeOfTravelDocumentServiceCheckbox).Checked = true;
-                                        }
-                                        else if (typeTravelDocument != null && typeTravelDocument.Equals("4"))
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentServiceCheckbox)).Click();
+                                        }else if (typeOfDocument != null && typeOfDocument == "4")
                                         {
-                                            browser.Find(FormHelper.TypeOfTravelDocumentOfficialCheckbox).Checked = true;
-                                        }
-                                        else if (typeTravelDocument != null && typeTravelDocument.Equals("5"))
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOfficialCheckbox)).Click();
+                                        }else if (typeOfDocument != null && typeOfDocument == "5")
                                         {
-                                            browser.Find(FormHelper.TypeOfTravelDocumentSpecialCheckbox).Checked = true;
-                                        }
-                                        else if (typeTravelDocument != null && typeTravelDocument.Equals("6"))
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentSpecialCheckbox)).Click();
+                                        }else if (typeOfDocument != null && typeOfDocument == "6")
                                         {
-                                            browser.Find(FormHelper.TypeOfTravelDocumentOtherCheckbox).Checked = true;
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOtherCheckbox)).Click();
                                         }
 
-                                        browser.Find(FormHelper.NumberOfTravelDocumentInput).Value =
-                                            node.SelectSingleNode("NumberOfTravelDocument")?.InnerText;
-                                        browser.Find(FormHelper.NumberOfTravelDocumentDateIssueInput).Value =
-                                            node.SelectSingleNode("NumberOfTravelDocumentDateIssue")?.InnerText;
-                                        browser.Find(FormHelper.NumberOfTravelDocumentValidUntilInput).Value =
-                                            node.SelectSingleNode("NumberOfTravelDocumentValidUntil")?.InnerText;
-                                        browser.Find(FormHelper.NumberOfTravelDocumentIssuedByInput).Value =
-                                            node.SelectSingleNode("NumberOfTravelDocumentIssuedBy")?.InnerText;
+                                        numberOfTravelDoc.SendKeys(node.SelectSingleNode("NumberOfTravelDocument")?.InnerText);
+                                        numberOfTravelDateIssue.SendKeys(node.SelectSingleNode("NumberOfTravelDocumentDateIssue")?.InnerText);
+                                        numberOfTravelValid.SendKeys(node.SelectSingleNode("NumberOfTravelDocumentValidUntil")?.InnerText);
+                                        numberOfTravelIssuedBy.SendKeys(node.SelectSingleNode("NumberOfTravelDocumentIssuedBy")?.InnerText);
 
+                                        driver.FindElement(By.Id(FormHelper.MinorDoesnotAppliedCheckbox)).Click();
 
-                                        browser.Find(FormHelper.MinorDoesnotAppliedCheckbox).Checked = true;
+                                        appCountry.SendKeys(node.SelectSingleNode("ApplicantCountry")?.InnerText);
+                                        appState.SendKeys(node.SelectSingleNode("ApplicantState")?.InnerText);
+                                        appPostalCode.SendKeys(node.SelectSingleNode("ApplicantPostalCode")?.InnerText);
+                                        appAddress.SendKeys(node.SelectSingleNode("ApplicantAddress")?.InnerText);
+                                        appEmail.SendKeys(node.SelectSingleNode("ApplicantEmail")?.InnerText);
+                                        appPhoneCode.SendKeys(node.SelectSingleNode("ApplicantPhoneCode")?.InnerText);
+                                        appPhone.SendKeys(node.SelectSingleNode("ApplicantPhone")?.InnerText);
+                                        appPlace.SendKeys(node.SelectSingleNode("ApplicantPlace")?.InnerText);
 
+                                        driver.FindElement(By.Id(FormHelper.OtherResidenceCheckbox)).Click();
 
-                                        browser.Find(FormHelper.ApplicantCountrySelect).Value =
-                                            node.SelectSingleNode("ApplicantCountry")?.InnerText;
-                                        browser.Find(FormHelper.ApplicantStateInput).Value =
-                                            node.SelectSingleNode("ApplicantState")?.InnerText;
-                                        browser.Find(FormHelper.ApplicantPlaceInput).Value =
-                                            node.SelectSingleNode("ApplicantPlace")?.InnerText;
-                                        browser.Find(FormHelper.ApplicantPostalCodeInput).Value =
-                                            node.SelectSingleNode("ApplicantPostalCode")?.InnerText;
-                                        browser.Find(FormHelper.ApplicantAddressInput).Value =
-                                            node.SelectSingleNode("ApplicantAddress")?.InnerText;
-                                        browser.Find(FormHelper.ApplicantEmailInput).Value =
-                                            node.SelectSingleNode("ApplicantEmail")?.InnerText;
-                                        browser.Find(FormHelper.ApplicantPhoneCodeInput).Value =
-                                            node.SelectSingleNode("ApplicantPhoneCode")?.InnerText;
-                                        browser.Find(FormHelper.ApplicantPhoneInput).Value =
-                                            node.SelectSingleNode("ApplicantPhone")?.InnerText;
-
-
-                                        browser.Find(FormHelper.OtherResidenceCheckbox).Checked = true;
-
-
-
-                                        var currentOccupation = node.SelectSingleNode("CurrentOccupation")?.InnerText;
-                                        if (currentOccupation != null && currentOccupation.Equals("08"))
+                                        var curOccupation = node.SelectSingleNode("CurrentOccupation")?.InnerText;
+                                        if (curOccupation != null && curOccupation == "08")
                                         {
-                                            browser.Find(FormHelper.CurrentOccupationSelect).Value = "08";
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationSelect)).SendKeys("08");
+                                        }else if (curOccupation != null && curOccupation == "30")
+                                        {
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationSelect)).SendKeys("30");
                                         }
-                                        else if (currentOccupation != null && currentOccupation.Equals("30"))
+                                        else if (curOccupation != null && curOccupation == "33")
                                         {
-                                            browser.Find(FormHelper.CurrentOccupationSelect).Value = "30";
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationSelect)).SendKeys("33");
                                         }
-                                        else if (currentOccupation != null && currentOccupation.Equals("33"))
+                                        else
                                         {
-                                            browser.Find(FormHelper.CurrentOccupationSelect).Value = "33";
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationSelect)).SendKeys(curOccupation);
                                         }
 
-                                        var currentOccupationType =
-                                            node.SelectSingleNode("CurrentOcupationType")?.InnerText;
-                                        if (currentOccupationType != null && currentOccupationType.Equals("PRA"))
+                                        var curOccupationType = node.SelectSingleNode("CurrentOcupationType")?.InnerText;
+                                        if (curOccupationType != null && curOccupationType == "PRA")
                                         {
-                                            browser.Find(FormHelper.CurrentOccupationAddressEmployerCheckbox).Checked =
-                                                true;
-                                        }
-                                        else if (currentOccupationType != null && currentOccupationType.Equals("UCZ"))
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationAddressEmployerCheckbox)).Click();
+                                        }else if (curOccupationType != null && curOccupationType == "UCZ")
                                         {
-                                            browser.Find(FormHelper.CurrentOccupationAddressSchoolCheckbox).Checked =
-                                                true;
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationAddressSchoolCheckbox)).Click();
                                         }
 
+                                        curOcupState.SendKeys(node.SelectSingleNode("CurrentOccupationState")?.InnerText);
+                                        curOcupProvince.SendKeys(node.SelectSingleNode("CurrentOccupationProvince")?.InnerText);
+                                        curOcupPlace.SendKeys(node.SelectSingleNode("CurrentOccupationPlace")?.InnerText);
+                                        curOcupPostalCode.SendKeys(node.SelectSingleNode("CurrentOccupationPostalCode")?.InnerText);
+                                        curOcupAddress.SendKeys(node.SelectSingleNode("CurrentOccupationAddress")?.InnerText);
+                                        curOcupPhoneCode.SendKeys(node.SelectSingleNode("CurrentOccupationPhoneCode")?.InnerText);
+                                        curOcupPhone.SendKeys(node.SelectSingleNode("CurrentOccupationPhone")?.InnerText);
+                                        curOcupName.SendKeys(node.SelectSingleNode("CurrentOccupationName")?.InnerText);
+                                        curOcupEmail.SendKeys(node.SelectSingleNode("CurrentOccupationEmail")?.InnerText);
+                                        curOcupFaxCode.SendKeys(node.SelectSingleNode("CurrentOccupationFaxCode")?.InnerText);
+                                        curOcupFax.SendKeys(node.SelectSingleNode("CurrentOccupationFax")?.InnerText);
 
-                                        browser.Find(FormHelper.CurrentOccupationStateSelect).Value =
-                                            node.SelectSingleNode("CurrentOccupationState")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationProvinceInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationProvince")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationPlaceInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationPlace")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationPostalCodeInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationPostalCode")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationAddressInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationAddress")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationPhoneCodeInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationPhoneCode")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationPhoneInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationPhone")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationNameInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationName")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationEmailInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationEmail")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationFaxCodeInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationFaxCode")?.InnerText;
-                                        browser.Find(FormHelper.CurrentOccupationFaxInput).Value =
-                                            node.SelectSingleNode("CurrentOccupationFax")?.InnerText;
+                                        driver.FindElement(By.Id(FormHelper.MainPurposeTourismCheckbox)).Click();
+                                        driver.FindElement(By.Id(FormHelper.MainPurposeCulturalCheckbox)).Click();
+                                        driver.FindElement(By.Id(FormHelper.MainPurposeVisitToFamilyCheckbox)).Click();
 
-                                        browser.Find(FormHelper.MainPurposeTourismCheckbox).Checked = true;
-                                        browser.Find(FormHelper.MainPurposeCulturalCheckbox).Checked = true;
-                                        browser.Find(FormHelper.MainPurposeVisitToFamilyCheckbox).Checked = true;
+                                        destinationCountry.SendKeys(node.SelectSingleNode("DestinationCountry")?.InnerText);
+                                        firstEntry.SendKeys(node.SelectSingleNode("FirstEntryCountry")?.InnerText);
 
-                                        browser.Find(FormHelper.DestinationCountrySelect).Value =
-                                            node.SelectSingleNode("DestinationCountry")?.InnerText;
-                                        browser.Find(FormHelper.FirstEntryCountrySelect).Value =
-                                            node.SelectSingleNode("FirstEntryCountry")?.InnerText;
-
-
-                                        var numberOfEntCheckbox = node.SelectSingleNode("NumberOfEntries")?.InnerText;
-                                        if (numberOfEntCheckbox != null && numberOfEntCheckbox.Equals("1"))
+                                        var numberOfEnter = node.SelectSingleNode("NumberOfEntries")?.InnerText;
+                                        if (numberOfEnter != null && numberOfEnter == "1")
                                         {
-                                            browser.Find(FormHelper.NumberOfEntriesSingleCheckbox).Checked = true;
+                                            driver.FindElement(By.Id(FormHelper.NumberOfEntriesSingleCheckbox)).Click();
                                         }
-                                        else if (numberOfEntCheckbox != null && numberOfEntCheckbox.Equals("2"))
+                                        else if (numberOfEnter != null && numberOfEnter == "2")
                                         {
-                                            browser.Find(FormHelper.NumberOfEntriesTwoCheckbox).Checked = true;
+                                            driver.FindElement(By.Id(FormHelper.NumberOfEntriesTwoCheckbox)).Click();
                                         }
-                                        else if (numberOfEntCheckbox != null && numberOfEntCheckbox.Equals("3"))
+                                        else if (numberOfEnter != null && numberOfEnter == "3")
                                         {
-                                            browser.Find(FormHelper.NumberOfEntriesMultiCheckbox).Checked = true;
+                                            driver.FindElement(By.Id(FormHelper.NumberOfEntriesMultiCheckbox)).Click();
                                         }
 
+                                        duration.SendKeys(node.SelectSingleNode("Duration")?.InnerText);
+                                        arrDate.SendKeys(node.SelectSingleNode("ArriveDate")?.InnerText);
+                                        deparDate.SendKeys(node.SelectSingleNode("DepartureDate")?.InnerText);
 
-
-                                        browser.Find(FormHelper.DurationInput).Value =
-                                            node.SelectSingleNode("Duration")?.InnerText;
-
-                                        browser.Find(FormHelper.ArriveDateInput).Value =
-                                            node.SelectSingleNode("ArriveDate")?.InnerText;
-                                        browser.Find(FormHelper.DepartureDateInput).Value =
-                                            node.SelectSingleNode("DepartureDate")?.InnerText;
-
-                                        var otherShengenVisas = node.SelectSingleNode("OtherShengenVisas")?.InnerText;
-                                        if (otherShengenVisas != null && otherShengenVisas.Equals("Yes"))
+                                        var otherShengen = node.SelectSingleNode("OtherShengenVisas")?.InnerText;
+                                        if (otherShengen != null && otherShengen == "Yes")
                                         {
-                                            browser.Find(FormHelper.OtherShengenVisasCheckbox).Checked = true;
-                                            browser.Find(FormHelper.OtherShengenVisasFirstInInput).Value =
-                                                node.SelectSingleNode("OtherShengenVisasFirstIn")?.InnerText;
-                                            browser.Find(FormHelper.OtherShengenVisasFirstOutInInput).Value =
-                                                node.SelectSingleNode("OtherShengenVisasFirstOut")?.InnerText;
-                                            browser.Find(FormHelper.OtherShengenVisasSecondInInput).Value =
-                                                node.SelectSingleNode("OtherShengenVisasSecondIn")?.InnerText;
-                                            browser.Find(FormHelper.OtherShengenVisasSecondOutInput).Value =
-                                                node.SelectSingleNode("OtherShengenVisasSecondOut")?.InnerText;
-                                            browser.Find(FormHelper.OtherShengenVisasThridInInput).Value =
-                                                node.SelectSingleNode("OtherShengenVisasThridIn")?.InnerText;
-                                            browser.Find(FormHelper.OtherShengenVisasThirdOutInput).Value =
-                                                node.SelectSingleNode("OtherShengenVisasThirdOut")?.InnerText;
+                                            driver.FindElement(By.Id(FormHelper.OtherShengenVisasCheckbox)).Click();
+                                            driver.FindElement(By.Id(FormHelper.OtherShengenVisasFirstInInput)).SendKeys(node.SelectSingleNode("OtherShengenVisasFirstIn")?.InnerText);
+                                            driver.FindElement(By.Id(FormHelper.OtherShengenVisasFirstOutInInput)).SendKeys(node.SelectSingleNode("OtherShengenVisasFirstOut")?.InnerText);
                                         }
 
+                                        driver.FindElement(By.Id("cp_f_chkNiedotyczy28")).Click();
 
+                                        var recPersonType = node.SelectSingleNode("ReceivingPersonType")?.InnerText;
+                                        if (recPersonType != null && recPersonType == "1")
+                                        {
+                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonFirmCheckbox)).Click();
+                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonName)).SendKeys(node.SelectSingleNode("ReceivingPersonName")?.InnerText);
+                                        }else if (recPersonType != null && recPersonType == "2")
+                                        {
+                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonLifeCheckbox)).Click();
+                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonFirstName)).SendKeys(node.SelectSingleNode("ReceivingPersonFirstName")?.InnerText);
+                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonLastName)).SendKeys(node.SelectSingleNode("ReceivingPersonLastName")?.InnerText);
+                                        }
 
-                                        IsDone = true;
+                                        recCountry.SendKeys(node.SelectSingleNode("ReceivingPersonCountry")?.InnerText);
+                                        // todo: rewrite this
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonCity)).SendKeys(node.SelectSingleNode("ReceivingPersonCity")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPostalCode)).SendKeys(node.SelectSingleNode("ReceivingPersonPostalCode")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPhonePrefix)).SendKeys(node.SelectSingleNode("ReceivingPersonPhonePrefix")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPhone)).SendKeys(node.SelectSingleNode("ReceivingPersonPhone")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFaxPrefix)).SendKeys(node.SelectSingleNode("ReceivingPersonFaxPrefix")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFax)).SendKeys(node.SelectSingleNode("ReceivingPersonFax")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonAddress)).SendKeys(node.SelectSingleNode("ReceivingPersonAddress")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonHouseNumber)).SendKeys(node.SelectSingleNode("ReceivingPersonHouseNumber")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFlatNumber)).SendKeys(node.SelectSingleNode("ReceivingPersonFlatNumber")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonEmail)).SendKeys(node.SelectSingleNode("ReceivingPersonEmail")?.InnerText);
+
+                                        driver.FindElement(By.Id(FormHelper.HowsPayCheckbox)).Click();
+                                        driver.FindElement(By.Id(FormHelper.PayCash)).Click();
+                                        driver.FindElement(By.Id(FormHelper.PayCard)).Click();
+                                        driver.FindElement(By.Id(FormHelper.PayAcom)).Click();
+                                        driver.FindElement(By.Id(FormHelper.EuDoesApplied)).Click();
+                                        driver.FindElement(By.Id(FormHelper.IAgreeFirst)).Click();
+                                        driver.FindElement(By.Id(FormHelper.IAgreeSecond)).Click();
+                                        driver.FindElement(By.Id(FormHelper.IAgreeLast)).Click();
+                                        Thread.Sleep(30000);
+                                        driver.FindElement(By.Id("cp_f_cmdDalej")).Click();
+                                        Thread.Sleep(30000);
+                                        driver.FindElement(By.Id("cp_f_cmdZakoncz")).Click();
                                     }
+                                Thread.Sleep(1000);
+                                driver.FindElement(By.Id("cp_btnPobierz")).Click();
+                                driver.Quit();
+                                IsDone = true;
                             }
 
                         }
@@ -400,7 +471,7 @@ namespace EKonsulatConsole
                             IsDone = false;
                         }
 
-                        IsDone = true;
+                        //IsDone = true;
                     }
                 }
             }
@@ -411,7 +482,7 @@ namespace EKonsulatConsole
             }
 
 
-            return IsDone = false;
+            return IsDone;
         }
 
 
