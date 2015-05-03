@@ -69,7 +69,7 @@ namespace EKonsulatConsole
 
             try
             {
-                browser.Navigate(Url, 20000);
+                browser.Navigate(Url, 25000);
                 if (LastRequestFailed(browser))
                 {
                     _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!");
@@ -175,28 +175,29 @@ namespace EKonsulatConsole
                             {
                                 browser.AutoRedirect = true;
                                 selectFor = browser.Find(ElementType.SelectBox, FindBy.Id, "cp_cbRodzajUslugi");
+
                                 if (selectFor.Exists)
                                 {
-                                    
                                     selectFor.DoAspNetLinkPostBack();
                                     selectFor.Value = visaForLuck;
+
+                                    //selectFor.DoAspNetLinkPostBack();
+                                    _helper.Log(ConsoleColor.White, "[ELEMENT] Select for " + selectFor.Value);
                                     Thread.Sleep(1000);
                                     if (LastRequestFailed(browser))
                                     {
                                         _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!");
                                         return IsDone = false;
                                     }
-                                    
                                 }
                             }
 
-                            Thread.Sleep(1000);
 
                             // Succses captha
                             var dateEl = browser.Find("span", FindBy.Id, "cp_lblBrakTerminow");
                             if (dateEl.Exists)
                             {
-                                _helper.Log(ConsoleColor.Magenta, "[INFO] No dates avaliable.");
+                                _helper.Log(ConsoleColor.Magenta, "[INFO] No dates avaliable. " + dateEl.XElement.Value);
                                 IsDone = false;
                             }
 
