@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -19,13 +20,12 @@ namespace EKonsulatConsole
 
             try
             {
-                PingReply reply = ping.Send(address, 2000);
-                if (reply == null) return false;
-
-                return (reply.Status == IPStatus.Success);
+                PingReply reply = ping.Send(address, 2500);
+                return reply?.Status == IPStatus.Success;
             }
             catch (PingException e)
             {
+                Debug.Write("Ping debug line:" + e.Message);
                 return false;
             }
         }

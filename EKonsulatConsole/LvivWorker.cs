@@ -24,12 +24,12 @@ namespace EKonsulatConsole
         private string IdService { get; set; }
         private string IdCity { get; set; }
         private string IdApp { get; set; }
-        public bool IsDone { get; set; }
+        public bool IsDone { get; private set; }
         private readonly ArrayList _dateList = new ArrayList();
         private readonly Helper _helper = new Helper();
-        public HtmlResult capthaInput;
-        public HtmlResult CapthaHtmlResult;
-        public string properUrl;
+        private HtmlResult _capthaInput;
+        private HtmlResult _capthaHtmlResult;
+        private string _properUrl;
 
         public LvivWorker(string ids, string idc, string appid)
         {
@@ -84,34 +84,34 @@ namespace EKonsulatConsole
 
                 if (IdCity == "83")
                 {
-                    CapthaHtmlResult = browser.Find("c_uslugi_rejestracjaterminu_cp_botdetectcaptcha_CaptchaImage");
+                    _capthaHtmlResult = browser.Find("c_uslugi_rejestracjaterminu_cp_botdetectcaptcha_CaptchaImage");
                     var capthaImage = browser.Find("img", FindBy.Id, "c_uslugi_rejestracjaterminu_cp_botdetectcaptcha_CaptchaImage").GetAttribute("src");
-                    properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage}";
+                    _properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage}";
                 }
                 else
                 {
-                    CapthaHtmlResult = browser.Find("cp_KomponentObrazkowy_CaptchaImageID");
+                    _capthaHtmlResult = browser.Find("cp_KomponentObrazkowy_CaptchaImageID");
                     var capthaImage = browser.Find("img", FindBy.Id, "cp_KomponentObrazkowy_CaptchaImageID").GetAttribute("src");
-                    properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage.Substring(2)}";
+                    _properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage.Substring(2)}";
                 }
 
                 
 
-                if (CapthaHtmlResult.Exists)
+                if (_capthaHtmlResult.Exists)
                 {
                     var fileNameGuid = Guid.NewGuid();
 
-                    _helper.Log(ConsoleColor.Green, "[INFO] Link to captha: " + properUrl);
+                    _helper.Log(ConsoleColor.Green, "[INFO] Link to captha: " + _properUrl);
                     _helper.Log(ConsoleColor.Green, "[INFO] Saving to file: " + fileNameGuid);
 
 
                     if (IdCity == "83")
                     {
-                        browser.DownloadImageFromStream(properUrl, @"Assets\", fileNameGuid + ".png");
+                        browser.DownloadImageFromStream(_properUrl, @"Assets\", fileNameGuid + ".png");
                     }
                     else
                     {
-                        browser.DownloadImageFromStream(properUrl, @"Assets\", fileNameGuid + ".png");
+                        browser.DownloadImageFromStream(_properUrl, @"Assets\", fileNameGuid + ".png");
                     }
 
 
@@ -134,16 +134,16 @@ namespace EKonsulatConsole
                         
                         if (IdCity == "83")
                         {
-                            capthaInput = browser.Find("cp_BotDetectCaptchaCodeTextBox");
+                            _capthaInput = browser.Find("cp_BotDetectCaptchaCodeTextBox");
                         }
                         else
                         {
-                            capthaInput = browser.Find("cp_KomponentObrazkowy_VerificationID");
+                            _capthaInput = browser.Find("cp_KomponentObrazkowy_VerificationID");
                         }
                         
-                        if (capthaInput.Exists)
+                        if (_capthaInput.Exists)
                         {
-                            capthaInput.Value = captha;
+                            _capthaInput.Value = captha;
                             var btnSubmitCaptha = browser.Find("cp_btnDalej");
                             btnSubmitCaptha.Click();
 
