@@ -10,7 +10,7 @@ namespace EKonsulatConsole
     {
         private static readonly IdValidator IdValidator = new IdValidator();
         private static readonly Helper Helper = new Helper();
-
+        private static int tries = 0;
         static void Main(string[] args)
         {
 
@@ -18,12 +18,17 @@ namespace EKonsulatConsole
             var idc = Console.ReadLine();
             Helper.Log(ConsoleColor.Cyan, "Please enter service or visa type id: ");
             var ids = Console.ReadLine();
+            Helper.Log(ConsoleColor.Green, "Please enter applicant id: ");
+            var appId = Console.ReadLine();
 
             if (IdValidator.ValidateArgsCity(idc) && IdValidator.ValidateArgsService(ids))
             {
-                LvivWorker driveWorker = new LvivWorker(ids, idc);
+                //Console.Title = "[RUN] E-Konsulat Visa Search with params!";
+                LvivWorker driveWorker = new LvivWorker(ids, idc, appId);
                 while (driveWorker.IsDone == false)
                 {
+                    tries++;
+                    Console.Title = $"[{tries}][RUN] E-Konsulat Visa Search with params!";
                     driveWorker.DoJob();
                 }
             }

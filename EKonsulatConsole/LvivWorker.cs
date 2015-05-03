@@ -23,6 +23,7 @@ namespace EKonsulatConsole
         private const string AntigateKey = "eca8a538092144846d1e013a03555931";
         private string IdService { get; set; }
         private string IdCity { get; set; }
+        private string IdApp { get; set; }
         public bool IsDone { get; set; }
         private readonly ArrayList _dateList = new ArrayList();
         private readonly Helper _helper = new Helper();
@@ -30,8 +31,9 @@ namespace EKonsulatConsole
         public HtmlResult CapthaHtmlResult;
         public string properUrl;
 
-        public LvivWorker(string ids, string idc)
+        public LvivWorker(string ids, string idc, string appid)
         {
+            IdApp = appid;
             IdService = ids;
             IdCity = idc;
             Url = $"https://secure.e-konsulat.gov.pl/Uslugi/RejestracjaTerminu.aspx?IDUSLUGI={IdService}&IDPlacowki={IdCity}";
@@ -39,7 +41,7 @@ namespace EKonsulatConsole
 
         public bool DoJob()
         {
-            Console.Title = "[RUN] E-Konsulat Visa Search with params!";
+            
             _helper.Log(ConsoleColor.Cyan, "[INFO] Initialize connection!");
 
             var browser = new Browser();
@@ -121,6 +123,8 @@ namespace EKonsulatConsole
                         CheckRetryCount = 10
                     };
                     anticaptha.Parameters.Set("regsense", "1");
+                    anticaptha.Parameters.Set("phrase", "0");
+
 
                     var captha = anticaptha.GetAnswer(@"Assets\" + fileNameGuid + ".png");
                     if (captha != null)
@@ -261,7 +265,7 @@ namespace EKonsulatConsole
                                 var recCountry = driver.FindElement(By.Id(FormHelper.ReceivingPersonCountry));
 
                                 XmlDocument xmlDocument = new XmlDocument();
-                                xmlDocument.Load(@"Input\applicant_1.xml");
+                                xmlDocument.Load($@"Input\applicant_{IdApp}.xml");
                                 XmlNodeList nodes = xmlDocument.DocumentElement?.SelectNodes("/applicants/applicant");
 
                                 if (nodes != null)
@@ -453,12 +457,12 @@ namespace EKonsulatConsole
                                         driver.FindElement(By.Id(FormHelper.IAgreeFirst)).Click();
                                         driver.FindElement(By.Id(FormHelper.IAgreeSecond)).Click();
                                         driver.FindElement(By.Id(FormHelper.IAgreeLast)).Click();
-                                        Thread.Sleep(30000);
+                                        Thread.Sleep(60000);
                                         driver.FindElement(By.Id("cp_f_cmdDalej")).Click();
-                                        Thread.Sleep(30000);
+                                        Thread.Sleep(60000);
                                         driver.FindElement(By.Id("cp_f_cmdZakoncz")).Click();
                                     }
-                                Thread.Sleep(1000);
+                                Thread.Sleep(5000);
                                 driver.FindElement(By.Id("cp_btnPobierz")).Click();
                                 driver.Quit();
                                 IsDone = true;
