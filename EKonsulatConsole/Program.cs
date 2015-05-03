@@ -21,6 +21,13 @@ namespace EKonsulatConsole
             Helper.Log(ConsoleColor.Green, "Please enter applicant id: ");
             var appId = Console.ReadLine();
 
+            if (idc == "83")
+            {
+                Helper.Log(ConsoleColor.Green, "Please enter visa for id: ");
+                var visaFor = Console.ReadLine();
+                LvivWorker.visaForLuck = visaFor;
+            }
+
             if (IdValidator.ValidateArgsCity(idc) && IdValidator.ValidateArgsService(ids))
             {
                 //Console.Title = "[RUN] E-Konsulat Visa Search with params!";

@@ -1,19 +1,12 @@
 ﻿using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Xml;
 using Akumu.Antigate;
-using Newtonsoft.Json.Linq;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using SimpleBrowser;
-using Cookie = System.Net.Cookie;
 
 namespace EKonsulatConsole
 {
@@ -29,7 +22,9 @@ namespace EKonsulatConsole
         private readonly Helper _helper = new Helper();
         private HtmlResult _capthaInput;
         private HtmlResult _capthaHtmlResult;
+        private HtmlResult selectFor;
         private string _properUrl;
+        public static string visaForLuck { get; set; }
 
         public LvivWorker(string ids, string idc, string appid)
         {
@@ -39,9 +34,13 @@ namespace EKonsulatConsole
             Url = $"https://secure.e-konsulat.gov.pl/Uslugi/RejestracjaTerminu.aspx?IDUSLUGI={IdService}&IDPlacowki={IdCity}";
         }
 
+        /// <summary>
+        /// Does the job.
+        /// </summary>
+        /// <returns>null</returns>
         public bool DoJob()
         {
-            
+
             _helper.Log(ConsoleColor.Cyan, "[INFO] Initialize connection!");
 
             var browser = new Browser();
@@ -49,12 +48,12 @@ namespace EKonsulatConsole
             browser.RequestLogged += OnBrowserRequestLogged;
             browser.MessageLogged += new Action<Browser, string>(OnBrowserMessageLogged);
             browser.GenerateUserAgent();
-            
 
             _helper.Log(ConsoleColor.Yellow, "[SIMPLE BROWSER] UserAgent " + browser.UserAgent);
 
             Random proxyRandom = new Random();
-            var lines = File.ReadAllLines(@"Proxy.txt");
+            var proxyFile = @"Proxy-Online.txt";
+            var lines = File.ReadAllLines(proxyFile);
             var selectRandomProxy = proxyRandom.Next(0, lines.Length);
             _helper.Log(ConsoleColor.Green, "[INFO] Total proxies for this session is " + lines.Length);
 
@@ -65,7 +64,7 @@ namespace EKonsulatConsole
             }
 
 
-            browser.SetProxy(lines[selectRandomProxy]);
+            if (lines.Length > selectRandomProxy) browser.SetProxy(lines[selectRandomProxy]);
             _helper.Log(ConsoleColor.Cyan, "[INFO] Setting proxy to: " + lines[selectRandomProxy]);
 
             try
@@ -79,9 +78,7 @@ namespace EKonsulatConsole
 
                 _helper.Log(ConsoleColor.Green, "[INFO] Succsesful connection to website!");
 
-                
-
-
+                #region check the city captha image
                 if (IdCity == "83")
                 {
                     _capthaHtmlResult = browser.Find("c_uslugi_rejestracjaterminu_cp_botdetectcaptcha_CaptchaImage");
@@ -94,8 +91,7 @@ namespace EKonsulatConsole
                     var capthaImage = browser.Find("img", FindBy.Id, "cp_KomponentObrazkowy_CaptchaImageID").GetAttribute("src");
                     _properUrl = $"https://secure.e-konsulat.gov.pl{capthaImage.Substring(2)}";
                 }
-
-                
+                #endregion
 
                 if (_capthaHtmlResult.Exists)
                 {
@@ -104,6 +100,7 @@ namespace EKonsulatConsole
                     _helper.Log(ConsoleColor.Green, "[INFO] Link to captha: " + _properUrl);
                     _helper.Log(ConsoleColor.Green, "[INFO] Saving to file: " + fileNameGuid);
 
+                    #region download image by city
 
                     if (IdCity == "83")
                     {
@@ -114,6 +111,16 @@ namespace EKonsulatConsole
                         browser.DownloadImageFromStream(_properUrl, @"Assets\", fileNameGuid + ".png");
                     }
 
+                    #endregion
+
+                    #region save online proxies to file
+                    if (proxyFile.Equals(@"Proxy.txt"))
+                    {
+                        _helper.SaveWorkedProxyToFile(lines[selectRandomProxy]);
+                    }
+                    #endregion
+
+                    #region work with captha
 
                     var anticaptha = new AntiCaptcha(AntigateKey)
                     {
@@ -127,11 +134,12 @@ namespace EKonsulatConsole
 
 
                     var captha = anticaptha.GetAnswer(@"Assets\" + fileNameGuid + ".png");
+
                     if (captha != null)
                     {
                         _helper.Log(ConsoleColor.Green, "[INFO] Captha code is " + captha);
 
-                        
+
                         if (IdCity == "83")
                         {
                             _capthaInput = browser.Find("cp_BotDetectCaptchaCodeTextBox");
@@ -140,7 +148,7 @@ namespace EKonsulatConsole
                         {
                             _capthaInput = browser.Find("cp_KomponentObrazkowy_VerificationID");
                         }
-                        
+
                         if (_capthaInput.Exists)
                         {
                             _capthaInput.Value = captha;
@@ -162,12 +170,36 @@ namespace EKonsulatConsole
                                 return IsDone = false;
                             }
 
+                            // Other city
+                            if (IdCity == "83")
+                            {
+                                browser.AutoRedirect = true;
+                                selectFor = browser.Find(ElementType.SelectBox, FindBy.Id, "cp_cbRodzajUslugi");
+                                if (selectFor.Exists)
+                                {
+                                    
+                                    selectFor.DoAspNetLinkPostBack();
+                                    selectFor.Value = visaForLuck;
+                                    Thread.Sleep(1000);
+                                    if (LastRequestFailed(browser))
+                                    {
+                                        _helper.Log(ConsoleColor.Red, "[ERROR] Can't conect to E-Konsulat page!");
+                                        return IsDone = false;
+                                    }
+                                    
+                                }
+                            }
+
+                            Thread.Sleep(1000);
+
                             // Succses captha
                             var dateEl = browser.Find("span", FindBy.Id, "cp_lblBrakTerminow");
                             if (dateEl.Exists)
                             {
-                                _helper.Log(ConsoleColor.Magenta, "[INFO] No dates avaliable: ");
+                                _helper.Log(ConsoleColor.Magenta, "[INFO] No dates avaliable.");
+                                IsDone = false;
                             }
+
 
                             // Succses captha and founded new dates
                             var dateAval = browser.Find(ElementType.SelectBox, FindBy.Id, "cp_cbDzien");
@@ -206,10 +238,12 @@ namespace EKonsulatConsole
                                 var chromeOptions = new ChromeOptions();
 
                                 var proxy = new Proxy();
+                                proxy.Kind = ProxyKind.Manual;
                                 proxy.HttpProxy = lines[selectRandomProxy];
                                 proxy.FtpProxy = lines[selectRandomProxy];
                                 proxy.SslProxy = lines[selectRandomProxy];
-                               
+
+
                                 chromeOptions.Proxy = proxy;
                                 IWebDriver driver = new ChromeDriver(@"Chrome\", chromeOptions);
                                 //Cookie cookie = new Cookie();
@@ -221,7 +255,8 @@ namespace EKonsulatConsole
 
                                 for (int i = 0; i < cookie.Count; i++)
                                 {
-                                    driverCookie.AddCookie(new OpenQA.Selenium.Cookie(cookie[i].Name, cookie[i].Value, cookie[i].Domain, cookie[i].Path, cookie[i].Expires));
+                                    driverCookie.AddCookie(new OpenQA.Selenium.Cookie(cookie[i].Name, cookie[i].Value,
+                                        cookie[i].Domain, cookie[i].Path, cookie[i].Expires));
                                 }
 
                                 // Element
@@ -235,9 +270,12 @@ namespace EKonsulatConsole
                                 var originalNat = driver.FindElement(By.Id(FormHelper.OriginalNatInput));
                                 var nationalId = driver.FindElement(By.Id(FormHelper.NationalIdInput));
                                 var numberOfTravelDoc = driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentInput));
-                                var numberOfTravelDateIssue = driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentDateIssueInput));
-                                var numberOfTravelValid = driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentValidUntilInput));
-                                var numberOfTravelIssuedBy = driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentIssuedByInput));
+                                var numberOfTravelDateIssue =
+                                    driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentDateIssueInput));
+                                var numberOfTravelValid =
+                                    driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentValidUntilInput));
+                                var numberOfTravelIssuedBy =
+                                    driver.FindElement(By.Id(FormHelper.NumberOfTravelDocumentIssuedByInput));
                                 var appCountry = driver.FindElement(By.Id(FormHelper.ApplicantCountrySelect));
                                 var appState = driver.FindElement(By.Id(FormHelper.ApplicantStateInput));
                                 var appPlace = driver.FindElement(By.Id(FormHelper.ApplicantPlaceInput));
@@ -247,11 +285,14 @@ namespace EKonsulatConsole
                                 var appPhoneCode = driver.FindElement(By.Id(FormHelper.ApplicantPhoneCodeInput));
                                 var appPhone = driver.FindElement(By.Id(FormHelper.ApplicantPhoneInput));
                                 var curOcupState = driver.FindElement(By.Id(FormHelper.CurrentOccupationStateSelect));
-                                var curOcupProvince = driver.FindElement(By.Id(FormHelper.CurrentOccupationProvinceInput));
+                                var curOcupProvince =
+                                    driver.FindElement(By.Id(FormHelper.CurrentOccupationProvinceInput));
                                 var curOcupPlace = driver.FindElement(By.Id(FormHelper.CurrentOccupationPlaceInput));
-                                var curOcupPostalCode = driver.FindElement(By.Id(FormHelper.CurrentOccupationPostalCodeInput));
+                                var curOcupPostalCode =
+                                    driver.FindElement(By.Id(FormHelper.CurrentOccupationPostalCodeInput));
                                 var curOcupAddress = driver.FindElement(By.Id(FormHelper.CurrentOccupationAddressInput));
-                                var curOcupPhoneCode = driver.FindElement(By.Id(FormHelper.CurrentOccupationPhoneCodeInput));
+                                var curOcupPhoneCode =
+                                    driver.FindElement(By.Id(FormHelper.CurrentOccupationPhoneCodeInput));
                                 var curOcupPhone = driver.FindElement(By.Id(FormHelper.CurrentOccupationPhoneInput));
                                 var curOcupName = driver.FindElement(By.Id(FormHelper.CurrentOccupationNameInput));
                                 var curOcupEmail = driver.FindElement(By.Id(FormHelper.CurrentOccupationEmailInput));
@@ -284,7 +325,8 @@ namespace EKonsulatConsole
                                         if (sexState != null && sexState == "M")
                                         {
                                             driver.FindElement(By.Id(FormHelper.SexMaleCheckbox)).Click();
-                                        }else if(sexState != null && sexState == "F")
+                                        }
+                                        else if (sexState != null && sexState == "F")
                                         {
                                             driver.FindElement(By.Id(FormHelper.SexFemaleCheckbox)).Click();
                                         }
@@ -293,19 +335,24 @@ namespace EKonsulatConsole
                                         if (martialStatus != null && martialStatus == "KP")
                                         {
                                             driver.FindElement(By.Id(FormHelper.MartialStatusSingleCheckbox)).Click();
-                                        }else if (martialStatus != null && martialStatus == "ZZ")
+                                        }
+                                        else if (martialStatus != null && martialStatus == "ZZ")
                                         {
                                             driver.FindElement(By.Id(FormHelper.MartialStatusMarriedCheckbox)).Click();
-                                        }else if (martialStatus != null && martialStatus == "SP")
+                                        }
+                                        else if (martialStatus != null && martialStatus == "SP")
                                         {
                                             driver.FindElement(By.Id(FormHelper.MartialStatusSeparatedCheckbox)).Click();
-                                        }else if (martialStatus != null && martialStatus == "RR")
+                                        }
+                                        else if (martialStatus != null && martialStatus == "RR")
                                         {
                                             driver.FindElement(By.Id(FormHelper.MartialStatusDivorcedCheckbox)).Click();
-                                        }else if (martialStatus != null && martialStatus == "WW")
+                                        }
+                                        else if (martialStatus != null && martialStatus == "WW")
                                         {
                                             driver.FindElement(By.Id(FormHelper.MartialStatusWidowerCheckbox)).Click();
-                                        }else if (martialStatus != null && martialStatus == "IN")
+                                        }
+                                        else if (martialStatus != null && martialStatus == "IN")
                                         {
                                             driver.FindElement(By.Id(FormHelper.MartialStatusOtherCheckbox)).Click();
                                         }
@@ -315,28 +362,43 @@ namespace EKonsulatConsole
                                         var typeOfDocument = node.SelectSingleNode("TypeOfTravelDocument")?.InnerText;
                                         if (typeOfDocument != null && typeOfDocument == "1")
                                         {
-                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOriginalCheckbox)).Click();
-                                        }else if (typeOfDocument != null && typeOfDocument == "2")
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOriginalCheckbox))
+                                                .Click();
+                                        }
+                                        else if (typeOfDocument != null && typeOfDocument == "2")
                                         {
-                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentDiplomaticCheckbox)).Click();
-                                        }else if (typeOfDocument != null && typeOfDocument == "3")
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentDiplomaticCheckbox))
+                                                .Click();
+                                        }
+                                        else if (typeOfDocument != null && typeOfDocument == "3")
                                         {
-                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentServiceCheckbox)).Click();
-                                        }else if (typeOfDocument != null && typeOfDocument == "4")
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentServiceCheckbox))
+                                                .Click();
+                                        }
+                                        else if (typeOfDocument != null && typeOfDocument == "4")
                                         {
-                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOfficialCheckbox)).Click();
-                                        }else if (typeOfDocument != null && typeOfDocument == "5")
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOfficialCheckbox))
+                                                .Click();
+                                        }
+                                        else if (typeOfDocument != null && typeOfDocument == "5")
                                         {
-                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentSpecialCheckbox)).Click();
-                                        }else if (typeOfDocument != null && typeOfDocument == "6")
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentSpecialCheckbox))
+                                                .Click();
+                                        }
+                                        else if (typeOfDocument != null && typeOfDocument == "6")
                                         {
-                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOtherCheckbox)).Click();
+                                            driver.FindElement(By.Id(FormHelper.TypeOfTravelDocumentOtherCheckbox))
+                                                .Click();
                                         }
 
-                                        numberOfTravelDoc.SendKeys(node.SelectSingleNode("NumberOfTravelDocument")?.InnerText);
-                                        numberOfTravelDateIssue.SendKeys(node.SelectSingleNode("NumberOfTravelDocumentDateIssue")?.InnerText);
-                                        numberOfTravelValid.SendKeys(node.SelectSingleNode("NumberOfTravelDocumentValidUntil")?.InnerText);
-                                        numberOfTravelIssuedBy.SendKeys(node.SelectSingleNode("NumberOfTravelDocumentIssuedBy")?.InnerText);
+                                        numberOfTravelDoc.SendKeys(
+                                            node.SelectSingleNode("NumberOfTravelDocument")?.InnerText);
+                                        numberOfTravelDateIssue.SendKeys(
+                                            node.SelectSingleNode("NumberOfTravelDocumentDateIssue")?.InnerText);
+                                        numberOfTravelValid.SendKeys(
+                                            node.SelectSingleNode("NumberOfTravelDocumentValidUntil")?.InnerText);
+                                        numberOfTravelIssuedBy.SendKeys(
+                                            node.SelectSingleNode("NumberOfTravelDocumentIssuedBy")?.InnerText);
 
                                         driver.FindElement(By.Id(FormHelper.MinorDoesnotAppliedCheckbox)).Click();
 
@@ -355,7 +417,8 @@ namespace EKonsulatConsole
                                         if (curOccupation != null && curOccupation == "08")
                                         {
                                             driver.FindElement(By.Id(FormHelper.CurrentOccupationSelect)).SendKeys("08");
-                                        }else if (curOccupation != null && curOccupation == "30")
+                                        }
+                                        else if (curOccupation != null && curOccupation == "30")
                                         {
                                             driver.FindElement(By.Id(FormHelper.CurrentOccupationSelect)).SendKeys("30");
                                         }
@@ -365,35 +428,45 @@ namespace EKonsulatConsole
                                         }
                                         else
                                         {
-                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationSelect)).SendKeys(curOccupation);
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationSelect))
+                                                .SendKeys(curOccupation);
                                         }
 
                                         var curOccupationType = node.SelectSingleNode("CurrentOcupationType")?.InnerText;
                                         if (curOccupationType != null && curOccupationType == "PRA")
                                         {
-                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationAddressEmployerCheckbox)).Click();
-                                        }else if (curOccupationType != null && curOccupationType == "UCZ")
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationAddressEmployerCheckbox))
+                                                .Click();
+                                        }
+                                        else if (curOccupationType != null && curOccupationType == "UCZ")
                                         {
-                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationAddressSchoolCheckbox)).Click();
+                                            driver.FindElement(By.Id(FormHelper.CurrentOccupationAddressSchoolCheckbox))
+                                                .Click();
                                         }
 
                                         curOcupState.SendKeys(node.SelectSingleNode("CurrentOccupationState")?.InnerText);
-                                        curOcupProvince.SendKeys(node.SelectSingleNode("CurrentOccupationProvince")?.InnerText);
+                                        curOcupProvince.SendKeys(
+                                            node.SelectSingleNode("CurrentOccupationProvince")?.InnerText);
                                         curOcupPlace.SendKeys(node.SelectSingleNode("CurrentOccupationPlace")?.InnerText);
-                                        curOcupPostalCode.SendKeys(node.SelectSingleNode("CurrentOccupationPostalCode")?.InnerText);
-                                        curOcupAddress.SendKeys(node.SelectSingleNode("CurrentOccupationAddress")?.InnerText);
-                                        curOcupPhoneCode.SendKeys(node.SelectSingleNode("CurrentOccupationPhoneCode")?.InnerText);
+                                        curOcupPostalCode.SendKeys(
+                                            node.SelectSingleNode("CurrentOccupationPostalCode")?.InnerText);
+                                        curOcupAddress.SendKeys(
+                                            node.SelectSingleNode("CurrentOccupationAddress")?.InnerText);
+                                        curOcupPhoneCode.SendKeys(
+                                            node.SelectSingleNode("CurrentOccupationPhoneCode")?.InnerText);
                                         curOcupPhone.SendKeys(node.SelectSingleNode("CurrentOccupationPhone")?.InnerText);
                                         curOcupName.SendKeys(node.SelectSingleNode("CurrentOccupationName")?.InnerText);
                                         curOcupEmail.SendKeys(node.SelectSingleNode("CurrentOccupationEmail")?.InnerText);
-                                        curOcupFaxCode.SendKeys(node.SelectSingleNode("CurrentOccupationFaxCode")?.InnerText);
+                                        curOcupFaxCode.SendKeys(
+                                            node.SelectSingleNode("CurrentOccupationFaxCode")?.InnerText);
                                         curOcupFax.SendKeys(node.SelectSingleNode("CurrentOccupationFax")?.InnerText);
 
                                         driver.FindElement(By.Id(FormHelper.MainPurposeTourismCheckbox)).Click();
                                         driver.FindElement(By.Id(FormHelper.MainPurposeCulturalCheckbox)).Click();
                                         driver.FindElement(By.Id(FormHelper.MainPurposeVisitToFamilyCheckbox)).Click();
 
-                                        destinationCountry.SendKeys(node.SelectSingleNode("DestinationCountry")?.InnerText);
+                                        destinationCountry.SendKeys(
+                                            node.SelectSingleNode("DestinationCountry")?.InnerText);
                                         firstEntry.SendKeys(node.SelectSingleNode("FirstEntryCountry")?.InnerText);
 
                                         var numberOfEnter = node.SelectSingleNode("NumberOfEntries")?.InnerText;
@@ -418,8 +491,10 @@ namespace EKonsulatConsole
                                         if (otherShengen != null && otherShengen == "Yes")
                                         {
                                             driver.FindElement(By.Id(FormHelper.OtherShengenVisasCheckbox)).Click();
-                                            driver.FindElement(By.Id(FormHelper.OtherShengenVisasFirstInInput)).SendKeys(node.SelectSingleNode("OtherShengenVisasFirstIn")?.InnerText);
-                                            driver.FindElement(By.Id(FormHelper.OtherShengenVisasFirstOutInInput)).SendKeys(node.SelectSingleNode("OtherShengenVisasFirstOut")?.InnerText);
+                                            driver.FindElement(By.Id(FormHelper.OtherShengenVisasFirstInInput))
+                                                .SendKeys(node.SelectSingleNode("OtherShengenVisasFirstIn")?.InnerText);
+                                            driver.FindElement(By.Id(FormHelper.OtherShengenVisasFirstOutInInput))
+                                                .SendKeys(node.SelectSingleNode("OtherShengenVisasFirstOut")?.InnerText);
                                         }
 
                                         driver.FindElement(By.Id("cp_f_chkNiedotyczy28")).Click();
@@ -428,26 +503,40 @@ namespace EKonsulatConsole
                                         if (recPersonType != null && recPersonType == "1")
                                         {
                                             driver.FindElement(By.Id(FormHelper.ReceivingPersonFirmCheckbox)).Click();
-                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonName)).SendKeys(node.SelectSingleNode("ReceivingPersonName")?.InnerText);
-                                        }else if (recPersonType != null && recPersonType == "2")
+                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonName))
+                                                .SendKeys(node.SelectSingleNode("ReceivingPersonName")?.InnerText);
+                                        }
+                                        else if (recPersonType != null && recPersonType == "2")
                                         {
                                             driver.FindElement(By.Id(FormHelper.ReceivingPersonLifeCheckbox)).Click();
-                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonFirstName)).SendKeys(node.SelectSingleNode("ReceivingPersonFirstName")?.InnerText);
-                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonLastName)).SendKeys(node.SelectSingleNode("ReceivingPersonLastName")?.InnerText);
+                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonFirstName))
+                                                .SendKeys(node.SelectSingleNode("ReceivingPersonFirstName")?.InnerText);
+                                            driver.FindElement(By.Id(FormHelper.ReceivingPersonLastName))
+                                                .SendKeys(node.SelectSingleNode("ReceivingPersonLastName")?.InnerText);
                                         }
 
                                         recCountry.SendKeys(node.SelectSingleNode("ReceivingPersonCountry")?.InnerText);
                                         // todo: rewrite this
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonCity)).SendKeys(node.SelectSingleNode("ReceivingPersonCity")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPostalCode)).SendKeys(node.SelectSingleNode("ReceivingPersonPostalCode")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPhonePrefix)).SendKeys(node.SelectSingleNode("ReceivingPersonPhonePrefix")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPhone)).SendKeys(node.SelectSingleNode("ReceivingPersonPhone")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFaxPrefix)).SendKeys(node.SelectSingleNode("ReceivingPersonFaxPrefix")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFax)).SendKeys(node.SelectSingleNode("ReceivingPersonFax")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonAddress)).SendKeys(node.SelectSingleNode("ReceivingPersonAddress")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonHouseNumber)).SendKeys(node.SelectSingleNode("ReceivingPersonHouseNumber")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFlatNumber)).SendKeys(node.SelectSingleNode("ReceivingPersonFlatNumber")?.InnerText);
-                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonEmail)).SendKeys(node.SelectSingleNode("ReceivingPersonEmail")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonCity))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonCity")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPostalCode))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonPostalCode")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPhonePrefix))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonPhonePrefix")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonPhone))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonPhone")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFaxPrefix))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonFaxPrefix")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFax))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonFax")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonAddress))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonAddress")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonHouseNumber))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonHouseNumber")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonFlatNumber))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonFlatNumber")?.InnerText);
+                                        driver.FindElement(By.Id(FormHelper.ReceivingPersonEmail))
+                                            .SendKeys(node.SelectSingleNode("ReceivingPersonEmail")?.InnerText);
 
                                         driver.FindElement(By.Id(FormHelper.HowsPayCheckbox)).Click();
                                         driver.FindElement(By.Id(FormHelper.PayCash)).Click();
@@ -464,28 +553,32 @@ namespace EKonsulatConsole
                                     }
                                 Thread.Sleep(5000);
                                 driver.FindElement(By.Id("cp_btnPobierz")).Click();
+                                Thread.Sleep(20000);
                                 driver.Quit();
                                 IsDone = true;
                             }
-
                         }
                         else
                         {
                             _helper.Log(ConsoleColor.Red, "[ERROR] Capta code return error!");
                             IsDone = false;
                         }
-
-                        //IsDone = true;
                     }
+
+                    #endregion
                 }
+                else
+                {
+                    _helper.Log(ConsoleColor.Cyan, "[ERROR] Cant find captha image!");
+                    IsDone = false;
+                }
+
             }
             catch (Exception ex)
             {
-                _helper.Log(ConsoleColor.Red, "[ERROR] " + ex.Message);
-                //throw;
+                _helper.Log(ConsoleColor.Red, "[ERROR {BROWSER}] " + ex.Message);
+                IsDone = false;
             }
-
-
             return IsDone;
         }
 

@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -27,6 +28,24 @@ namespace EKonsulatConsole
             {
                 Debug.Write("Ping debug line:" + e.Message);
                 return false;
+            }
+        }
+
+        public void SaveWorkedProxyToFile(string proxy)
+        {
+            string filePart = @"Proxy-Online.txt";
+
+            if (File.Exists(filePart))
+            {
+                TextWriter tw = new StreamWriter(filePart, true);
+                tw.WriteLine(proxy);
+                tw.Close();
+            }else if (!File.Exists(filePart))
+            {
+                File.Create(filePart);
+                TextWriter tw = new StreamWriter(filePart);
+                tw.WriteLine(proxy);
+                tw.Close();
             }
         }
 
